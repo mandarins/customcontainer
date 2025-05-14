@@ -15,12 +15,11 @@
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 
-std::string ContainerManager::_hostname;
-
 ContainerManager::ContainerManager() {}
 
 ContainerManager::~ContainerManager() {}
 
+using namespace std;
 
 int ContainerManager::runApp(const char *app)
 {
@@ -32,7 +31,7 @@ int ContainerManager::runApp(const char *app)
     { // Child process
         if (execve(app, argv, envp) == -1)
         {
-            HelpResponse::abortHandler(app + std::string(" execve failed"));
+            HelpResponse::abortHandler(app + string(" execve failed"));
         }
     }
     else if (pid > 0)
@@ -63,6 +62,10 @@ int ContainerManager::setupContainer(void *args)
     CloneArgs *cl_args = static_cast<CloneArgs *>(args);
     ArgvParser parser(cl_args->argc, cl_args->argv);
 
+    string image = parser.getImage();
+    string hostname = image.substr(image.find_last_of('/')+1);
+
+
     if (parser.getOption() == "--limit-pid")
     {
         int limit = parser.getLimit();
@@ -70,7 +73,7 @@ int ContainerManager::setupContainer(void *args)
         {
             HelpResponse::helpAndExit("Invalid limit value for --limit-pid option");
         }
-        setupCGroup(pid, limit, getHostName());
+        setupCGroup(pid, limit, hostname);
     }
 
     if (chroot(parser.getImage().c_str()) == -1)
@@ -88,24 +91,25 @@ int ContainerManager::setupContainer(void *args)
         HelpResponse::abortHandler("Failed to mount /proc filesystem");
     }
 
-    sethostname(ContainerManager::_hostname.c_str(), ContainerManager::_hostname.length());
 
-    HelpResponse::info(" ContainerManager::setupContainer hostname: " + ContainerManager::_hostname);
+    sethostname( hostname.c_str(), hostname.length());
+
+    HelpResponse::info("ContainerManager::setupContainer hostname: " + hostname);
 
     return runApp(parser.getApplication().c_str());
 }
 
-void ContainerManager::setupCGroup(pid_t container_pid, int max_processes, const std::string & hostname)
+void ContainerManager::setupCGroup(pid_t container_pid, int max_processes, const string & hostname)
 {
-    const std::string cgroup_path_root = "/sys/fs/cgroup";
-    std::string cgroup_path = cgroup_path_root + "/" + hostname;
+    const string cgroup_path_root = "/sys/fs/cgroup";
+    string cgroup_path = cgroup_path_root + "/" + hostname;
 
     if (!MountCGroup(cgroup_path))
     {
         HelpResponse::abortHandler("Could not mount: " + cgroup_path_root, errno);
     }
 
-    std::ofstream subtree_control_file(cgroup_path_root + "/cgroup.subtree_control");
+    ofstream subtree_control_file(cgroup_path_root + "/cgroup.subtree_control");
     if (!subtree_control_file)
     {
         HelpResponse::abortHandler("Ensure that cgroup v2 is enabled and the pids controller is available.", errno);
@@ -113,7 +117,7 @@ void ContainerManager::setupCGroup(pid_t container_pid, int max_processes, const
     subtree_control_file << "+pids";
     subtree_control_file.close();
 
-    std::ofstream pids_max_file(cgroup_path + "/pids.max");
+    ofstream pids_max_file(cgroup_path + "/pids.max");
     if (!pids_max_file)
     {
         HelpResponse::abortHandler("setupCGroup: Failed to open pids.max", errno);
@@ -122,16 +126,16 @@ void ContainerManager::setupCGroup(pid_t container_pid, int max_processes, const
     pids_max_file << max_processes;
     pids_max_file.close();
 
-    HelpResponse::info(std::string("Set pids.max to  ") + std::to_string(max_processes) + std::string(" in ")+ cgroup_path);
-    HelpResponse::info(std::string("Writing PID  ") + std::to_string(container_pid) + std::string(" to cgroup.procs"));
+    HelpResponse::info(string("ContainerManager::setupCGroup Set pids.max to  ") + to_string(max_processes) + string(" in ")+ cgroup_path);
+    HelpResponse::info(string("ContainerManager::setupCGroup Writing PID  ") + to_string(container_pid) + string(" to cgroup.procs"));
 
-    std::ofstream cgroup_procs_file(cgroup_path + "/cgroup.procs");
+    ofstream cgroup_procs_file(cgroup_path + "/cgroup.procs");
     if (!cgroup_procs_file)
     {
         HelpResponse::abortHandler("Ensure that cgroup v2 is enabled and the pids controller is available.", errno);
     }
 
-    HelpResponse::info("Adding process to cgroup: showing container pid " + std::to_string(container_pid));
+    HelpResponse::info("ContainerManager::setupCGroup Adding process to cgroup for container pid " + to_string(container_pid));
     cgroup_procs_file << container_pid;
     cgroup_procs_file.close();
 }
@@ -141,10 +145,15 @@ int ContainerManager::runContainer(int argc, char *argv[])
     CloneArgs args = {argc, argv};
     ArgvParser parser(argc, argv);
 
-    std::string image = parser.getImage();
-    ContainerManager::_hostname = image.substr(image.find_last_of('/')+1);
-    
-    
+    string image = parser.getImage();
+    string hostname = image.substr(image.find_last_of('/')+1);
+    string original_hostname = getHostName();
+
+    HelpResponse::info( "ContainerManager::runContainer Setup");
+    HelpResponse::info( "    Image: " + image);
+    HelpResponse::info( "    Hostname: " + hostname);
+    HelpResponse::info( "    Original Hostname: " + original_hostname);
+
     char *stack = new char[STACK_SIZE];
     if (stack == nullptr)
     {
@@ -156,10 +165,10 @@ int ContainerManager::runContainer(int argc, char *argv[])
                       CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUTS | SIGCHLD, &args);
     if (pid < 0)
     {
-        HelpResponse::abortHandler("Failed to create container process; errno: ", errno);
+        HelpResponse::abortHandler("ContainerManager::runContainer Failed to create container process; errno: ", errno);
     }
 
-    std::string msg = "Container PID: " + std::to_string(pid);
+    string msg = "ContainerManager::runContainer Container created for PID: " + to_string(pid);
     HelpResponse::info(msg.c_str());
 
     // Add the containerized process to the cgroup
@@ -168,37 +177,42 @@ int ContainerManager::runContainer(int argc, char *argv[])
         int limit = parser.getLimit();
         if (limit < 0)
         {
-            HelpResponse::helpAndExit("Invalid limit value for --limit-pid option");
+            HelpResponse::helpAndExit("ContainerManager::runContainer Invalid limit value for --limit-pid option");
         }
-        ContainerManager::setupCGroup(pid, limit, ContainerManager::_hostname); // Pass the PID returned by clone
+
+        HelpResponse::info( "ContainerManager::runContainer Calling ContainerManager::setupCGroup: with hostname: " + hostname);
+        ContainerManager::setupCGroup(pid, limit, hostname); // Pass the PID returned by clone
     }
 
     if (waitpid(pid, nullptr, 0) == -1)
     {
-        HelpResponse::helpAndExit("Failed to wait for container process");
+        HelpResponse::helpAndExit("ContainerManager::runContainer Failed to wait for container process");
     }
 
-    std::string mountproc = parser.getImage() + std::string("/proc");
-    HelpResponse::info("Unmounting /proc filesystem: " + mountproc);
-    umount2(mountproc.c_str(), MNT_DETACH); // Unmount /proc filesystem
+    string mountproc = parser.getImage() + string("/proc");
+    HelpResponse::info("ContainerManager::runContainer Unmounting /proc filesystem: " + mountproc);
+    umount2(mountproc.c_str(), MNT_FORCE); // Unmount /proc filesystem
     if (errno != 0)
     {
-        HelpResponse::errorHandler("Failed to unmount /proc filesystem");
+        HelpResponse::errorHandler("ContainerManager::runContainer Failed to unmount /proc filesystem...errno [" + to_string(errno) + "]: ");
     }
+
+    sethostname(original_hostname.c_str(), original_hostname.length());
+
     delete[] (stack - STACK_SIZE);
     return pid;
 }
 
-bool ContainerManager::MountCGroup(const std::string &cgroup_path)
+bool ContainerManager::MountCGroup(const string &cgroup_path)
 {
     // return true; // For testing purposes, always return true
 
-    HelpResponse::info("MountCGroup:  mkdir path: " + cgroup_path);
+    HelpResponse::info("ContainerManager::MountCGroup: mkdir path: " + cgroup_path);
 
 
     if (mkdir(cgroup_path.c_str(), 0755) == -1 && errno != EEXIST)
     {
-        HelpResponse::abortHandler("Failed to create cgroup mount point: " + std::to_string(errno));
+        HelpResponse::abortHandler("ContainerManager::MountCGroup: Failed to create cgroup mount point: " + to_string(errno));
         return false;
     }
 
@@ -206,13 +220,13 @@ bool ContainerManager::MountCGroup(const std::string &cgroup_path)
     return true;
 }
 
-bool ContainerManager::createDirectories(const std::string &path, mode_t mode)
+bool ContainerManager::createDirectories(const string &path, mode_t mode)
 {
     size_t pos = 0;
-    std::string currentPath;
+    string currentPath;
 
     // Iterate through each component of the path
-    while ((pos = path.find('/', pos)) != std::string::npos)
+    while ((pos = path.find('/', pos)) != string::npos)
     {
         currentPath = path.substr(0, pos++);
         if (currentPath.empty())
@@ -225,8 +239,8 @@ bool ContainerManager::createDirectories(const std::string &path, mode_t mode)
             // Directory does not exist, attempt to create it
             if (mkdir(currentPath.c_str(), mode) == -1 && errno != EEXIST)
             {
-                std::cerr << "Failed to create directory: " << currentPath
-                          << ", errno: " << strerror(errno) << std::endl;
+                cerr << "Failed to create directory: " << currentPath
+                          << ", errno: " << strerror(errno) << endl;
                 return false;
             }
         }
@@ -235,8 +249,10 @@ bool ContainerManager::createDirectories(const std::string &path, mode_t mode)
     // Create the final directory
     if (mkdir(path.c_str(), mode) == -1 && errno != EEXIST)
     {
-        std::cerr << "Failed to create directory: " << path
-                  << ", errno: " << strerror(errno) << std::endl;
+        HelpResponse::errorHandler("ContainerManager::createDirectories: Failed to create directory: " 
+                                    + path 
+                                    + "error: " 
+                                    + to_string(errno));
         return false;
     }
 

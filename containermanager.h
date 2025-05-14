@@ -24,10 +24,7 @@ private:
     static void setupCGroup(pid_t container_pid, int max_processes, const std::string & hostname = "");
     static bool MountCGroup( const std::string &cgroup_path);
     static bool createDirectories(const std::string &path, mode_t mode = 0755);
-
-    static std::string _hostname;
-    std::vector<std::string> containers;
-
+ 
     static const int STACK_SIZE = 1024 * 1024; // Stack size for child process
     struct CloneArgs
     {
