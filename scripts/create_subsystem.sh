@@ -42,6 +42,18 @@ cp /lib/x86_64-linux-gnu/libapparmor.so.1 "$TARGET_DIR/lib"
 cp /lib/x86_64-linux-gnu/libaudit.so.1 "$TARGET_DIR/lib64"
 cp /lib/x86_64-linux-gnu/libcrypto.so.3 "$TARGET_DIR/lib"
 cp /lib/x86_64-linux-gnu/libcap-ng.so.0 "$TARGET_DIR/lib"
+cp /lib/x86_64-linux-gnu/libbpf.so.1 "$TARGET_DIR/lib"
+
+cp /lib/x86_64-linux-gnu/libz.so.1 "$TARGET_DIR/lib"
+cp /lib/x86_64-linux-gnu/libbpf.so.1 "$TARGET_DIR/lib"
+cp /lib/x86_64-linux-gnu/libelf.so.1 "$TARGET_DIR/lib"
+cp /lib/x86_64-linux-gnu/libmnl.so.0 "$TARGET_DIR/lib"  
+
+cp /usr/lib/x86_64-linux-gnu/libcap.so.2  "$TARGET_DIR/lib"
+cp /lib/x86_64-linux-gnu/libidn2.so.0 "$TARGET_DIR/lib"
+cp /lib/x86_64-linux-gnu/libunistring.so.5 "$TARGET_DIR/lib"
+
+
 cp /usr/libexec/sudo/libsudo_util.so.0   "$TARGET_DIR/usr/libexec/sudo"
 
 cp /bin/bash   "$TARGET_DIR/bin"
@@ -69,8 +81,24 @@ cp /etc/hostname   "$TARGET_DIR/etc"
 cp /etc/hosts   "$TARGET_DIR/etc"
 chmod -R +x "$TARGET_DIR/bin"
 
+# Copy additional networking binaries
+cp /bin/ping "$TARGET_DIR/bin"
+cp /bin/ip "$TARGET_DIR/bin"
+#cp /bin/netstat "$TARGET_DIR/bin"  # Optional, if net-tools is installed
+
+# Copy additional network configuration files
+cp /etc/resolv.conf "$TARGET_DIR/etc"
+cp /etc/hosts "$TARGET_DIR/etc"
+cp /etc/nsswitch.conf "$TARGET_DIR/etc"
+
+mkdir -p "$TARGET_DIR/root"
+
+# Create a .bashrc file in the root user's home directory
+echo "ip link set lo up" > "$TARGET_DIR/root/.bashrc"
+echo "ip addr add 127.0.0.201/8 dev lo" >> "$TARGET_DIR/root/.bashrc"
+
 # ...existing code...
-echo "$HOSTNAME" > "$TARGET_DIR/etc/hostname"
+#echo "$HOSTNAME" > "$TARGET_DIR/etc/hostname"
 # ...existing code...
 echo "Folders created under $TARGET_DIR:"
 ls -1 "$TARGET_DIR"

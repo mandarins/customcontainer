@@ -88,6 +88,10 @@ int ContainerManager::setupContainer(void *args)
         HelpResponse::abortHandler("Failed to mount /proc filesystem");
     }
 
+    sethostname(ContainerManager::_hostname.c_str(), ContainerManager::_hostname.length());
+
+    HelpResponse::info(" ContainerManager::setupContainer hostname: " + ContainerManager::_hostname);
+
     return runApp(parser.getApplication().c_str());
 }
 
@@ -140,11 +144,7 @@ int ContainerManager::runContainer(int argc, char *argv[])
     std::string image = parser.getImage();
     ContainerManager::_hostname = image.substr(image.find_last_of('/')+1);
     
-    sethostname(ContainerManager::_hostname.c_str(), ContainerManager::_hostname.length());
-
-
-    HelpResponse::info(" ContainerManager::runContainer hostname: " + ContainerManager::_hostname);
-
+    
     char *stack = new char[STACK_SIZE];
     if (stack == nullptr)
     {
